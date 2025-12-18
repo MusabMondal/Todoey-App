@@ -8,12 +8,16 @@
 
 import UIKit
 import CoreData
+import RealmSwift
 
-class CategoryViewController: UITableViewController {
+class CategoryViewController: SwipeTableViewController{
+     
+    let realm = try! Realm()
     
-    var categoryArray = [CategoryItem]()
+    var categoryArray : Results<CategoryItem>?
     
     let context = (UIApplication.shared.delegate as! AppDelegate).persistentContainer.viewContext
+    
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -21,35 +25,26 @@ class CategoryViewController: UITableViewController {
         loadData()
         
         title = "Todoey"
-        let appearance = UINavigationBarAppearance()
-        appearance.configureWithOpaqueBackground()        // solid background
-        appearance.backgroundColor = .systemBlue
-        appearance.titleTextAttributes = [
-            .foregroundColor: UIColor.white
-        ]
-        appearance.largeTitleTextAttributes = [
-            .foregroundColor: UIColor.white
-        ]
-        
-        // Apply to this navigation controller
-        navigationController?.navigationBar.standardAppearance = appearance
-        navigationController?.navigationBar.scrollEdgeAppearance = appearance
-        navigationController?.navigationBar.compactAppearance = appearance
-        
-        // Optional: tint color for bar button items
-        navigationController?.navigationBar.tintColor = .white
         
     }
 
     // MARK: - Table view data source
     override func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
-        return categoryArray.count
+        return categoryArray?.count ?? 1
     }
     
     override func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
-        let cell = tableView.dequeueReusableCell(withIdentifier: "CategoryCell", for: indexPath)
+        let cell = super.tableView(tableView, cellForRowAt: indexPath)
         
-        cell.textLabel?.text = categoryArray[indexPath.row].name
+        cell.textLabel?.text = categoryArray?[indexPath.row].name ?? "No Categories added yet"
+        if let hex = categoryArray?[indexPath.row].colorHex,
+           let color = UIColor(hex: hex) {
+            cell.backgroundColor = color
+            cell.textLabel?.textColor = color.contrastTextColor()
+        } else {
+            cell.backgroundColor = .systemBlue
+        }
+
         
         return cell
     }
@@ -64,7 +59,7 @@ class CategoryViewController: UITableViewController {
             let destinationVC = segue.destination as! TodoListViewController
             
             if let indexPath = tableView.indexPathForSelectedRow {
-                destinationVC.selectedCategory = categoryArray[indexPath.row]
+                destinationVC.selectedCategory = categoryArray?[indexPath.row]
             }
         }
     }
@@ -77,12 +72,18 @@ class CategoryViewController: UITableViewController {
         let alert = UIAlertController(title: "Add Category Item", message: "", preferredStyle: .alert)
         
         let action = UIAlertAction(title: "Add Item", style: .default) { action in
-            let newCatergoryItem = CategoryItem(context: self.context)
-            newCatergoryItem.name = textField.text!
+            //CoreData implemetation
+//            let newCatergoryItem = CategoryItem(context: self.context)
             
-            self.categoryArray.append(newCatergoryItem)
+            let newCategoryItem = CategoryItem()
+            newCategoryItem.name = textField.text!
+            newCategoryItem.colorHex = randomHexColor()
             
-            self.saveData()
+            
+            //Results autoupdates without needing to append
+/*            self.categoryArray.append(newCategoryItem*/
+            
+            self.saveData(with: newCategoryItem)
         }
         
         alert.addTextField { alertTextField in
@@ -98,9 +99,13 @@ class CategoryViewController: UITableViewController {
     
     //MARK: - Data Manipulation Methods
     
-    func saveData(){
+    func saveData(with category_item: CategoryItem){
         do{
-            try context.save()
+            //CoreData Implementation
+//            try context.save()
+            try realm.write {
+                realm.add(category_item)
+            }
         } catch {
             print("error saving data in context, \(error)")
         }
@@ -108,23 +113,37 @@ class CategoryViewController: UITableViewController {
         tableView.reloadData()
     }
     
-    func loadData(with request: NSFetchRequest<CategoryItem> = CategoryItem.fetchRequest()){
-//        let request : NSFetchRequest<CategoryItem> = CategoryItem.fetchRequest()
+    //CoreDate implentation of fetching data
+//    func loadData(with request: NSFetchRequest<CategoryItem> = CategoryItem.fetchRequest()){
+////        let request : NSFetchRequest<CategoryItem> = CategoryItem.fetchRequest()
+//        
+//        do{
+//            categoryArray = try context.fetch(request)
+//        } catch {
+//            print("error fetching data from context, \(error)")
+//        }
+//        
+//    }
+    
+    func loadData() {
+        categoryArray = realm.objects(CategoryItem.self)
         
-        do{
-            categoryArray = try context.fetch(request)
-        } catch {
-            print("error fetching data from context, \(error)")
-        }
-        
+        tableView.reloadData()
     }
     
+    override func updateModel(at indexPath: IndexPath) {
+        if let categoryForDeletion = self.categoryArray?[indexPath.row]{
+            do {
+                try self.realm.write {
+                    self.realm.delete(categoryForDeletion)
+                }
+            }catch{
+                print("error deleting category item, \(error)")
+            }
+        }
+    }
     
-    
-    
-    
-
-    
-    
-
 }
+
+
+
